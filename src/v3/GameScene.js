@@ -7,73 +7,161 @@ const W = 512;
 const WORLD_H = 220;
 const DIVIDER_Y = 224;
 const DIVIDER_H = 32;
-const WORLD_A_TOP = 0;
 const WORLD_B_TOP = DIVIDER_Y + DIVIDER_H;
 
-// NES-scale pixel sizes
-const SHIP_SCALE = 2;
-const ENEMY_SCALE = 2;
-const BULLET_SCALE = 2;
+const SCALE = 3; // pixel scale-up
 
-// Level data
+// Puzzle-focused level design
+// Each segment forms a spatial puzzle that REQUIRES perspective switching
+// Obstacles are arranged so there's no gap in one view but a clear path in the other
 const LEVEL_SEGMENTS = [
-  { at: 1, obstacles: [{ y: 0.5, type: 'big', passable: VIEW_SIDE }] },
-  { at: 4, obstacles: [
-    { y: 0.2, type: 'big', passable: VIEW_SIDE },
-    { y: 0.8, type: 'big', passable: VIEW_SIDE },
+  // === TUTORIAL: One wall, one solution ===
+  // Full wall of SIDE-passable obstacles — switch to SIDE to pass
+  { at: 2, obstacles: [
+    { y: 0.2, passable: VIEW_SIDE },
+    { y: 0.4, passable: VIEW_SIDE },
+    { y: 0.6, passable: VIEW_SIDE },
+    { y: 0.8, passable: VIEW_SIDE },
   ]},
-  { at: 7, obstacles: [{ y: 0.5, type: 'big', passable: VIEW_TOP }] },
-  { at: 10, obstacles: [{ y: 0.5, type: 'big', passable: VIEW_SIDE }] },
-  { at: 11.2, obstacles: [{ y: 0.5, type: 'big', passable: VIEW_TOP }] },
-  { at: 13, obstacles: [
-    { y: 0.3, type: 'med', passable: VIEW_SIDE },
-    { y: 0.7, type: 'med', passable: VIEW_TOP },
+
+  // Full wall of TOP-passable — switch to TOP to pass
+  { at: 6, obstacles: [
+    { y: 0.2, passable: VIEW_TOP },
+    { y: 0.4, passable: VIEW_TOP },
+    { y: 0.6, passable: VIEW_TOP },
+    { y: 0.8, passable: VIEW_TOP },
   ]},
-  { at: 15, enemies: [{ y: 0.5, pattern: 'drift' }] },
-  { at: 16, obstacles: [
-    { y: 0.15, type: 'big', passable: VIEW_TOP },
-    { y: 0.85, type: 'big', passable: VIEW_TOP },
-    { y: 0.5, type: 'med', passable: VIEW_SIDE },
+
+  // === LESSON 2: Mixed wall with one gap ===
+  // Wall with gap at 0.5 — but only in SIDE view (0.5 is side-passable)
+  { at: 10, obstacles: [
+    { y: 0.15, passable: VIEW_TOP },
+    { y: 0.35, passable: VIEW_TOP },
+    { y: 0.5, passable: VIEW_SIDE },  // the "gap" in side view
+    { y: 0.65, passable: VIEW_TOP },
+    { y: 0.85, passable: VIEW_TOP },
   ]},
-  { at: 19, obstacles: [
-    { y: 0.15, type: 'big', passable: VIEW_SIDE },
-    { y: 0.85, type: 'big', passable: VIEW_SIDE },
-    { y: 0.5, type: 'med', passable: VIEW_TOP },
+
+  // Reverse: gap only in TOP view
+  { at: 14, obstacles: [
+    { y: 0.15, passable: VIEW_SIDE },
+    { y: 0.35, passable: VIEW_SIDE },
+    { y: 0.5, passable: VIEW_TOP },   // gap in top view
+    { y: 0.65, passable: VIEW_SIDE },
+    { y: 0.85, passable: VIEW_SIDE },
   ]},
-  { at: 21, enemies: [{ y: 0.3, pattern: 'drift' }] },
-  { at: 22, obstacles: [{ y: 0.4, type: 'big', passable: VIEW_SIDE }] },
-  { at: 23, obstacles: [{ y: 0.6, type: 'big', passable: VIEW_TOP }] },
-  { at: 24, obstacles: [{ y: 0.3, type: 'big', passable: VIEW_SIDE }] },
-  { at: 25, obstacles: [{ y: 0.7, type: 'big', passable: VIEW_TOP }] },
-  { at: 26, obstacles: [{ y: 0.5, type: 'big', passable: VIEW_SIDE }] },
-  { at: 26.8, obstacles: [{ y: 0.5, type: 'big', passable: VIEW_TOP }] },
-  { at: 28, enemies: [
-    { y: 0.4, pattern: 'drift' },
-    { y: 0.7, pattern: 'drift' },
+
+  // === LESSON 3: Two walls in quick succession — must switch between ===
+  { at: 18, obstacles: [
+    { y: 0.2, passable: VIEW_SIDE },
+    { y: 0.4, passable: VIEW_SIDE },
+    { y: 0.6, passable: VIEW_SIDE },
+    { y: 0.8, passable: VIEW_SIDE },
   ]},
-  { at: 29, obstacles: [
-    { y: 0.2, type: 'big', passable: VIEW_SIDE },
-    { y: 0.5, type: 'big', passable: VIEW_TOP },
-    { y: 0.8, type: 'big', passable: VIEW_SIDE },
+  { at: 19.5, obstacles: [
+    { y: 0.2, passable: VIEW_TOP },
+    { y: 0.4, passable: VIEW_TOP },
+    { y: 0.6, passable: VIEW_TOP },
+    { y: 0.8, passable: VIEW_TOP },
   ]},
-  { at: 31, obstacles: [
-    { y: 0.2, type: 'big', passable: VIEW_TOP },
-    { y: 0.5, type: 'big', passable: VIEW_SIDE },
-    { y: 0.8, type: 'big', passable: VIEW_TOP },
+
+  // === PUZZLE 1: Checkerboard wall ===
+  // Alternating types — must pick a lane AND a perspective
+  // In SIDE view: gaps at 0.3, 0.7 (top-passable ones become passable? no —
+  // side-passable ones ghost. So side view: 0.2(ghost) 0.35(solid) 0.5(ghost) 0.65(solid) 0.8(ghost)
+  // Player must navigate through the solid ones
+  { at: 23, obstacles: [
+    { y: 0.2, passable: VIEW_SIDE },
+    { y: 0.35, passable: VIEW_TOP },
+    { y: 0.5, passable: VIEW_SIDE },
+    { y: 0.65, passable: VIEW_TOP },
+    { y: 0.8, passable: VIEW_SIDE },
   ]},
-  { at: 33, enemies: [{ y: 0.5, pattern: 'sine' }] },
-  { at: 34, obstacles: [
-    { y: 0.15, type: 'med', passable: VIEW_SIDE },
-    { y: 0.35, type: 'med', passable: VIEW_TOP },
-    { y: 0.55, type: 'med', passable: VIEW_SIDE },
-    { y: 0.75, type: 'med', passable: VIEW_TOP },
+
+  // Inverted checkerboard — forces the opposite perspective
+  { at: 25, obstacles: [
+    { y: 0.2, passable: VIEW_TOP },
+    { y: 0.35, passable: VIEW_SIDE },
+    { y: 0.5, passable: VIEW_TOP },
+    { y: 0.65, passable: VIEW_SIDE },
+    { y: 0.8, passable: VIEW_TOP },
   ]},
-  { at: 37, enemies: [
-    { y: 0.3, pattern: 'sine' },
-    { y: 0.7, pattern: 'sine' },
+
+  // === PUZZLE 2: Funnel ===
+  // Wide wall with a narrow gap that shifts position between perspectives
+  // SIDE view: gap at top (0.15 is side-passable)
+  // TOP view: gap at bottom (0.85 is top-passable) — but rest is solid!
+  { at: 28, obstacles: [
+    { y: 0.15, passable: VIEW_SIDE },  // ghost in side
+    { y: 0.3, passable: VIEW_TOP },
+    { y: 0.45, passable: VIEW_TOP },
+    { y: 0.6, passable: VIEW_TOP },
+    { y: 0.75, passable: VIEW_TOP },
+    { y: 0.85, passable: VIEW_TOP },   // ghost in top — gap here
   ]},
+
+  // === PUZZLE 3: Double funnel — must switch MID-WALL ===
+  // First half needs SIDE, second half needs TOP (but they arrive together)
+  // Top cluster: side-passable
+  { at: 32, obstacles: [
+    { y: 0.15, passable: VIEW_SIDE },
+    { y: 0.3, passable: VIEW_SIDE },
+  ]},
+  // Bottom cluster: top-passable (arrives slightly after)
+  { at: 32.8, obstacles: [
+    { y: 0.6, passable: VIEW_TOP },
+    { y: 0.75, passable: VIEW_TOP },
+    { y: 0.9, passable: VIEW_TOP },
+  ]},
+
+  // === PUZZLE 4: The Gauntlet ===
+  // Rapid alternating walls
+  { at: 36, obstacles: [
+    { y: 0.3, passable: VIEW_SIDE },
+    { y: 0.5, passable: VIEW_SIDE },
+    { y: 0.7, passable: VIEW_SIDE },
+  ]},
+  { at: 37, obstacles: [
+    { y: 0.3, passable: VIEW_TOP },
+    { y: 0.5, passable: VIEW_TOP },
+    { y: 0.7, passable: VIEW_TOP },
+  ]},
+  { at: 38, obstacles: [
+    { y: 0.3, passable: VIEW_SIDE },
+    { y: 0.5, passable: VIEW_SIDE },
+    { y: 0.7, passable: VIEW_SIDE },
+  ]},
+  { at: 39, obstacles: [
+    { y: 0.3, passable: VIEW_TOP },
+    { y: 0.5, passable: VIEW_TOP },
+    { y: 0.7, passable: VIEW_TOP },
+  ]},
+
+  // === PUZZLE 5: Total wall — must be in exactly the right perspective ===
+  { at: 42, obstacles: [
+    { y: 0.1, passable: VIEW_SIDE },
+    { y: 0.25, passable: VIEW_SIDE },
+    { y: 0.4, passable: VIEW_SIDE },
+    { y: 0.55, passable: VIEW_SIDE },
+    { y: 0.7, passable: VIEW_SIDE },
+    { y: 0.85, passable: VIEW_SIDE },
+  ]},
+  { at: 44, obstacles: [
+    { y: 0.1, passable: VIEW_TOP },
+    { y: 0.25, passable: VIEW_TOP },
+    { y: 0.4, passable: VIEW_TOP },
+    { y: 0.55, passable: VIEW_TOP },
+    { y: 0.7, passable: VIEW_TOP },
+    { y: 0.85, passable: VIEW_TOP },
+  ]},
+
+  // Guardians (sparse, not the focus)
+  { at: 16, enemies: [{ y: 0.5, pattern: 'drift' }] },
+  { at: 27, enemies: [{ y: 0.3, pattern: 'drift' }, { y: 0.7, pattern: 'drift' }] },
+  { at: 35, enemies: [{ y: 0.5, pattern: 'sine' }] },
+  { at: 41, enemies: [{ y: 0.3, pattern: 'sine' }, { y: 0.7, pattern: 'sine' }] },
 ];
-const LEVEL_LOOP = 40;
+const LEVEL_LOOP = 48;
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -81,96 +169,77 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    // Ships
     this.load.image('shipA', '/assets/v3/ship-neutral.png');
     this.load.image('shipA-up', '/assets/v3/ship-up.png');
     this.load.image('shipA-down', '/assets/v3/ship-down.png');
     this.load.image('shipB', '/assets/v3/ship-neutral-flip.png');
     this.load.image('shipB-up', '/assets/v3/ship-up-flip.png');
     this.load.image('shipB-down', '/assets/v3/ship-down-flip.png');
-
-    // Bullets
     this.load.image('bullet', '/assets/v3/bullet.png');
     this.load.image('enemyBullet', '/assets/v3/enemy-bullet.png');
-
-    // Explosions
     this.load.image('exp1', '/assets/v3/explosion1.png');
     this.load.image('exp2', '/assets/v3/explosion2.png');
     this.load.image('exp3', '/assets/v3/explosion3.png');
-
-    // Enemies
     for (let i = 1; i <= 6; i++) {
       this.load.image(`enemy${i}`, `/assets/v3/enemy${i}.png`);
     }
 
-    // Generate starfield texture
+    // Generate starfield
     const gfx = this.make.graphics({ add: false });
     gfx.fillStyle(0x000000, 1);
     gfx.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 40; i++) {
-      const bright = Phaser.Math.Between(1, 3);
-      const color = bright === 3 ? 0xffffff : bright === 2 ? 0x8888cc : 0x444466;
-      gfx.fillStyle(color, 1);
-      gfx.fillRect(
-        Phaser.Math.Between(0, 255),
-        Phaser.Math.Between(0, 255),
-        1, 1
-      );
+    for (let i = 0; i < 50; i++) {
+      const b = Phaser.Math.Between(1, 3);
+      gfx.fillStyle(b === 3 ? 0xffffff : b === 2 ? 0x8888cc : 0x444466, 1);
+      gfx.fillRect(Phaser.Math.Between(0, 255), Phaser.Math.Between(0, 255), 1, 1);
     }
     gfx.generateTexture('starfield', 256, 256);
     gfx.destroy();
 
-    // Generate obstacle textures (NES-style rocks)
-    this.generateObstacleTextures();
+    // Obstacle textures — more visible, NES-style
+    this.genObsTexture('obs-side', 0xff6600, 0x993300, 0xff8833);
+    this.genObsTexture('obs-top', 0x0088ff, 0x003366, 0x44aaff);
   }
 
-  generateObstacleTextures() {
-    // Orange obstacle (passable in side view)
-    const g1 = this.make.graphics({ add: false });
-    g1.lineStyle(1, 0xff6600, 1);
-    g1.strokeCircle(8, 8, 7);
-    g1.fillStyle(0x993300, 0.5);
-    g1.fillCircle(8, 8, 6);
-    g1.lineStyle(1, 0xff8833, 0.5);
-    g1.lineBetween(3, 5, 6, 3);
-    g1.lineBetween(10, 4, 13, 6);
-    g1.generateTexture('obs-side', 16, 16);
-    g1.destroy();
-
-    // Blue obstacle (passable in top view)
-    const g2 = this.make.graphics({ add: false });
-    g2.lineStyle(1, 0x0088ff, 1);
-    g2.strokeCircle(8, 8, 7);
-    g2.fillStyle(0x003366, 0.5);
-    g2.fillCircle(8, 8, 6);
-    g2.lineStyle(1, 0x44aaff, 0.5);
-    g2.lineBetween(4, 6, 7, 4);
-    g2.lineBetween(9, 5, 12, 7);
-    g2.generateTexture('obs-top', 16, 16);
-    g2.destroy();
+  genObsTexture(key, outline, fill, highlight) {
+    const g = this.make.graphics({ add: false });
+    // 16x16 crystal/asteroid
+    g.fillStyle(fill, 1);
+    g.fillRect(4, 2, 8, 12);
+    g.fillRect(2, 4, 12, 8);
+    g.fillStyle(outline, 1);
+    // Outline
+    g.fillRect(4, 1, 8, 1);
+    g.fillRect(4, 14, 8, 1);
+    g.fillRect(1, 4, 1, 8);
+    g.fillRect(14, 4, 1, 8);
+    g.fillRect(2, 2, 2, 2);
+    g.fillRect(12, 2, 2, 2);
+    g.fillRect(2, 12, 2, 2);
+    g.fillRect(12, 12, 2, 2);
+    // Highlight
+    g.fillStyle(highlight, 1);
+    g.fillRect(5, 3, 3, 1);
+    g.fillRect(4, 4, 1, 2);
+    g.generateTexture(key, 16, 16);
+    g.destroy();
   }
 
   create() {
     this.perspective = VIEW_SIDE;
-    this.scrollSpeed = 60;
+    this.scrollSpeed = 50;
     this.levelTime = 0;
     this.segmentIndex = 0;
     this.loopCount = 0;
     this.score = 0;
 
-    // World A — top half, flies right
-    this.worldA = this.createWorld(WORLD_A_TOP, WORLD_H, 'shipA', 1, 'A');
-
-    // Divider — Gradius-style status bar
+    this.worldA = this.createWorld(0, WORLD_H, 'shipA', 1, 'A');
     this.createDivider();
-
-    // World B — bottom half, flies left
     this.worldB = this.createWorld(WORLD_B_TOP, WORLD_H, 'shipB', -1, 'B');
 
     this.activeWorld = this.worldA;
     this.inactiveWorld = this.worldB;
 
-    // Input
     this.cursors = this.input.keyboard.createCursorKeys();
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
@@ -181,39 +250,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   createDivider() {
-    // Black bar
     const g = this.add.graphics();
     g.setDepth(10);
     g.fillStyle(0x000000, 1);
     g.fillRect(0, DIVIDER_Y, W, DIVIDER_H);
-
-    // Gradius-style scanlines on divider
     g.lineStyle(1, 0x222244, 0.5);
     for (let y = DIVIDER_Y + 2; y < DIVIDER_Y + DIVIDER_H; y += 2) {
       g.lineBetween(0, y, W, y);
     }
-
-    // Top/bottom edge lines
     g.lineStyle(1, 0x4444aa, 0.8);
     g.lineBetween(0, DIVIDER_Y, W, DIVIDER_Y);
     g.lineBetween(0, DIVIDER_Y + DIVIDER_H - 1, W, DIVIDER_Y + DIVIDER_H - 1);
 
-    // Title
-    this.add.text(W / 2, DIVIDER_Y + 4, 'G E M I N I', {
+    this.add.text(W / 2, DIVIDER_Y + 3, 'G E M I N I', {
       fontFamily: 'monospace', fontSize: '10px', color: '#4466aa',
     }).setOrigin(0.5, 0).setDepth(11);
 
-    // Perspective
-    this.perspText = this.add.text(8, DIVIDER_Y + 18, 'VIEW SIDE', {
-      fontFamily: 'monospace', fontSize: '8px', color: '#336699',
+    this.perspText = this.add.text(8, DIVIDER_Y + 18, 'SIDE', {
+      fontFamily: 'monospace', fontSize: '8px', color: '#ff8833',
     }).setDepth(11);
 
-    // Score
-    this.scoreText = this.add.text(W - 8, DIVIDER_Y + 18, 'SC 0', {
+    this.scoreText = this.add.text(W - 8, DIVIDER_Y + 18, '0', {
       fontFamily: 'monospace', fontSize: '8px', color: '#336699',
     }).setOrigin(1, 0).setDepth(11);
 
-    // Active indicator
     this.activeLabel = this.add.text(W / 2, DIVIDER_Y + 18, '▲ TWIN A', {
       fontFamily: 'monospace', fontSize: '8px', color: '#44aaff',
     }).setOrigin(0.5, 0).setDepth(11);
@@ -229,16 +289,14 @@ export class GameScene extends Phaser.Scene {
       aiShootCooldown: 0,
     };
 
-    // Starfield background (tiling)
     world.bg = this.add.tileSprite(0, topY, W, height, 'starfield');
     world.bg.setOrigin(0, 0);
 
-    // Ship
     const shipX = direction === 1 ? 50 : W - 50;
     world.ship = this.physics.add.sprite(shipX, topY + height / 2, shipKey);
-    world.ship.setScale(SHIP_SCALE);
+    world.ship.setScale(SCALE);
     world.ship.setDepth(3);
-    world.ship.body.setSize(20, 8);
+    world.ship.body.setSize(24, 8);
     world.ship.body.setBoundsRectangle(
       new Phaser.Geom.Rectangle(8, topY + 8, W - 16, height - 16)
     );
@@ -250,17 +308,16 @@ export class GameScene extends Phaser.Scene {
   update(time, delta) {
     const dt = delta / 1000;
     this.levelTime += dt;
-    const speed = this.scrollSpeed + this.loopCount * 8;
+    const speed = this.scrollSpeed + this.loopCount * 6;
 
     this.processLevelSegments();
     this.updateWorld(this.worldA, dt, speed);
     this.updateWorld(this.worldB, dt, speed);
 
-    // Player input
     const world = this.activeWorld;
     const ship = world.ship;
     const dir = world.direction;
-    const spd = 140;
+    const spd = 130;
     ship.body.setVelocity(0, 0);
 
     if (this.cursors.left.isDown) ship.body.setVelocityX(-spd * dir);
@@ -268,14 +325,12 @@ export class GameScene extends Phaser.Scene {
     if (this.cursors.up.isDown) ship.body.setVelocityY(-spd);
     else if (this.cursors.down.isDown) ship.body.setVelocityY(spd);
 
-    // Ship banking animation
     this.updateShipFrame(world);
 
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
       this.fireBullet(world);
     }
 
-    // AI
     this.updateAI(this.inactiveWorld, dt);
     this.updateShipFrame(this.inactiveWorld);
   }
@@ -283,9 +338,9 @@ export class GameScene extends Phaser.Scene {
   updateShipFrame(world) {
     const vy = world.ship.body.velocity.y;
     const prefix = world.shipKey;
-    if (vy < -30) {
+    if (vy < -20) {
       world.ship.setTexture(`${prefix}-up`);
-    } else if (vy > 30) {
+    } else if (vy > 20) {
       world.ship.setTexture(`${prefix}-down`);
     } else {
       world.ship.setTexture(prefix);
@@ -319,35 +374,31 @@ export class GameScene extends Phaser.Scene {
     const dir = world.direction;
     const spawnX = dir === 1 ? W + 16 : -16;
     const texKey = def.passable === VIEW_SIDE ? 'obs-side' : 'obs-top';
-    const scale = def.type === 'big' ? 3 : 2;
 
     const obs = this.physics.add.sprite(spawnX, y, texKey);
-    obs.setScale(scale);
+    obs.setScale(SCALE);
     obs.setDepth(2);
     obs.setData('passableIn', def.passable);
-    obs.setData('baseScale', scale);
     obs.setData('dir', dir);
-    obs.setData('driftPhase', Math.random() * Math.PI * 2);
-    obs.setData('driftSpeed', Phaser.Math.FloatBetween(-4, 4));
 
-    this.updateObstacleAppearance(obs);
+    this.updateObsAppearance(obs);
     world.obstacles.add(obs);
   }
 
-  updateObstacleAppearance(obs) {
+  updateObsAppearance(obs) {
     const passableIn = obs.getData('passableIn');
-    const baseScale = obs.getData('baseScale');
     if (this.perspective === passableIn) {
-      // Edge-on: squished, semi-transparent
+      // Edge-on: squished, semi-transparent — you see it but can fly through
       if (this.perspective === VIEW_SIDE) {
-        obs.setScale(baseScale * 0.2, baseScale);
+        obs.setScale(SCALE * 0.2, SCALE);
       } else {
-        obs.setScale(baseScale, baseScale * 0.2);
+        obs.setScale(SCALE, SCALE * 0.2);
       }
-      obs.setAlpha(0.4);
+      obs.setAlpha(0.35);
       obs.body.setSize(0, 0);
     } else {
-      obs.setScale(baseScale);
+      // Full — solid and dangerous
+      obs.setScale(SCALE);
       obs.setAlpha(1);
       obs.body.setSize(14, 14);
     }
@@ -358,58 +409,45 @@ export class GameScene extends Phaser.Scene {
     const dir = world.direction;
     const spawnX = dir === 1 ? W + 16 : -16;
     const num = Phaser.Math.Between(1, 6);
-
     const enemy = this.physics.add.sprite(spawnX, y, `enemy${num}`);
-    enemy.setScale(ENEMY_SCALE);
+    enemy.setScale(SCALE);
     enemy.setDepth(2);
     enemy.body.setSize(14, 14);
-    enemy.setData('pattern', def.pattern || 'drift');
+    enemy.setData('pattern', def.pattern);
     enemy.setData('startY', y);
     enemy.setData('time', 0);
     enemy.setData('dir', dir);
-    enemy.setData('shootCooldown', Phaser.Math.FloatBetween(1.5, 3));
-    // Flip enemy to face player
+    enemy.setData('shootCooldown', Phaser.Math.FloatBetween(2, 4));
     if (dir === -1) enemy.setFlipX(true);
     world.enemies.add(enemy);
   }
 
   updateWorld(world, dt, speed) {
     const dir = world.direction;
+    world.bg.tilePositionX += speed * dt * 0.3 * dir;
 
-    // Scroll starfield
-    world.bg.tilePositionX += speed * dt * 0.4 * dir;
-
-    // Obstacles
     world.obstacles.getChildren().forEach((obs) => {
       obs.x -= speed * dt * dir;
-      // Gentle drift
-      const drift = obs.getData('driftSpeed');
-      const phase = obs.getData('driftPhase');
-      obs.y += Math.sin(this.levelTime * 0.8 + phase) * drift * dt;
-
-      const oob = dir === 1 ? obs.x < -20 : obs.x > W + 20;
+      const oob = dir === 1 ? obs.x < -30 : obs.x > W + 30;
       if (oob) obs.destroy();
     });
 
-    // Enemies
     world.enemies.getChildren().forEach((enemy) => {
-      const pattern = enemy.getData('pattern');
       const t = enemy.getData('time') + dt;
       enemy.setData('time', t);
-
-      if (pattern === 'sine') {
-        enemy.x -= speed * 0.4 * dt * dir;
+      const pat = enemy.getData('pattern');
+      if (pat === 'sine') {
+        enemy.x -= speed * 0.35 * dt * dir;
         enemy.y = enemy.getData('startY') + Math.sin(t * 2) * 30;
       } else {
-        enemy.x -= speed * 0.3 * dt * dir;
+        enemy.x -= speed * 0.25 * dt * dir;
         enemy.y = enemy.getData('startY') + Math.sin(t * 1.5) * 12;
       }
 
-      // Shooting
       let cd = enemy.getData('shootCooldown') - dt;
       if (cd <= 0) {
         this.enemyShoot(enemy, world);
-        cd = Phaser.Math.FloatBetween(2, 4);
+        cd = Phaser.Math.FloatBetween(2.5, 5);
       }
       enemy.setData('shootCooldown', cd);
 
@@ -417,18 +455,14 @@ export class GameScene extends Phaser.Scene {
       if (oob) enemy.destroy();
     });
 
-    // Player bullets
     world.bullets.getChildren().forEach((b) => {
-      b.x += 300 * dt * dir;
-      const oob = dir === 1 ? b.x > W + 10 : b.x < -10;
-      if (oob) b.destroy();
+      b.x += 280 * dt * dir;
+      if ((dir === 1 && b.x > W + 10) || (dir === -1 && b.x < -10)) b.destroy();
     });
 
-    // Enemy bullets
     world.enemyBullets.getChildren().forEach((b) => {
-      b.x -= 120 * dt * dir;
-      const oob = dir === 1 ? b.x < -10 : b.x > W + 10;
-      if (oob) b.destroy();
+      b.x -= 100 * dt * dir;
+      if ((dir === 1 && b.x < -10) || (dir === -1 && b.x > W + 10)) b.destroy();
     });
 
     // Collisions
@@ -437,7 +471,7 @@ export class GameScene extends Phaser.Scene {
       bullet.destroy();
       enemy.destroy();
       this.score += 100;
-      this.scoreText.setText(`SC ${this.score}`);
+      this.scoreText.setText(`${this.score}`);
     });
 
     this.physics.overlap(world.ship, world.obstacles, (ship, obs) => {
@@ -461,17 +495,15 @@ export class GameScene extends Phaser.Scene {
 
   switchPerspective() {
     this.perspective = this.perspective === VIEW_SIDE ? VIEW_TOP : VIEW_SIDE;
-    this.perspText.setText(`VIEW ${this.perspective.toUpperCase()}`);
+    const color = this.perspective === VIEW_SIDE ? '#ff8833' : '#44aaff';
+    this.perspText.setText(this.perspective.toUpperCase());
+    this.perspText.setColor(color);
 
-    // Update all obstacles
     [this.worldA, this.worldB].forEach((world) => {
-      world.obstacles.getChildren().forEach((obs) => {
-        this.updateObstacleAppearance(obs);
-      });
+      world.obstacles.getChildren().forEach((obs) => this.updateObsAppearance(obs));
     });
 
-    // NES-style flash
-    this.cameras.main.flash(50, 40, 40, 80);
+    this.cameras.main.flash(40, 50, 50, 80);
   }
 
   swapActiveWorld() {
@@ -490,111 +522,93 @@ export class GameScene extends Phaser.Scene {
   }
 
   fireBullet(world) {
-    const ship = world.ship;
     const dir = world.direction;
-    const bullet = this.physics.add.sprite(
-      ship.x + 14 * dir, ship.y, 'bullet'
+    const b = this.physics.add.sprite(
+      world.ship.x + 16 * dir, world.ship.y, 'bullet'
     );
-    bullet.setScale(BULLET_SCALE);
-    bullet.setDepth(2);
-    if (dir === -1) bullet.setFlipX(true);
-    bullet.body.setSize(6, 4);
-    world.bullets.add(bullet);
+    b.setScale(SCALE);
+    b.setDepth(2);
+    if (dir === -1) b.setFlipX(true);
+    b.body.setSize(8, 4);
+    world.bullets.add(b);
   }
 
   enemyShoot(enemy, world) {
-    const dir = world.direction;
-    const bullet = this.physics.add.sprite(enemy.x, enemy.y, 'enemyBullet');
-    bullet.setScale(BULLET_SCALE);
-    bullet.setDepth(2);
-    bullet.body.setSize(6, 6);
-    world.enemyBullets.add(bullet);
+    const b = this.physics.add.sprite(enemy.x, enemy.y, 'enemyBullet');
+    b.setScale(SCALE);
+    b.setDepth(2);
+    b.body.setSize(6, 6);
+    world.enemyBullets.add(b);
   }
 
   spawnExplosion(x, y) {
-    const frames = ['exp1', 'exp2', 'exp3'];
-    frames.forEach((key, i) => {
-      this.time.delayedCall(i * 80, () => {
-        const exp = this.add.sprite(x, y, key);
-        exp.setScale(SHIP_SCALE);
-        exp.setDepth(5);
+    ['exp1', 'exp2', 'exp3'].forEach((key, i) => {
+      this.time.delayedCall(i * 60, () => {
+        const e = this.add.sprite(x, y, key);
+        e.setScale(SCALE);
+        e.setDepth(5);
         this.tweens.add({
-          targets: exp,
-          alpha: 0,
-          scale: SHIP_SCALE * 2,
-          duration: 200,
-          onComplete: () => exp.destroy(),
+          targets: e, alpha: 0, scale: SCALE * 2.5, duration: 200,
+          onComplete: () => e.destroy(),
         });
       });
     });
-    this.cameras.main.shake(40, 0.002);
+    this.cameras.main.shake(30, 0.002);
   }
 
   hitShip(world) {
     this.tweens.add({
-      targets: world.ship,
-      alpha: 0.15,
-      duration: 60,
-      yoyo: true,
-      repeat: 8,
+      targets: world.ship, alpha: 0.1, duration: 50, yoyo: true, repeat: 8,
     });
   }
 
-  // AI for inactive twin
   updateAI(world, dt) {
     const ship = world.ship;
     const dir = world.direction;
-    const speed = 120;
+    const speed = 110;
     let targetY = world.topY + world.height / 2;
-    let nearestThreatDist = Infinity;
+    let nearestDist = Infinity;
     let shouldShoot = false;
 
-    // Dodge obstacles
     world.obstacles.getChildren().forEach((obs) => {
       if (obs.getData('passableIn') === this.perspective) return;
       const dx = (obs.x - ship.x) * dir;
-      if (dx > 0 && dx < 120) {
-        if (dx < nearestThreatDist) {
-          nearestThreatDist = dx;
+      if (dx > 0 && dx < 100) {
+        if (dx < nearestDist) {
+          nearestDist = dx;
           const center = world.topY + world.height / 2;
-          targetY = obs.y > center ? obs.y - 40 : obs.y + 40;
+          targetY = obs.y > center ? obs.y - 35 : obs.y + 35;
           targetY = Phaser.Math.Clamp(targetY, world.topY + 16, world.topY + world.height - 16);
         }
       }
     });
 
-    // Dodge enemy bullets
     world.enemyBullets.getChildren().forEach((b) => {
-      const dx = Math.abs(b.x - ship.x);
-      const dy = b.y - ship.y;
-      if (dx < 50 && Math.abs(dy) < 30) {
-        targetY = ship.y + (dy > 0 ? -35 : 35);
+      if (Math.abs(b.x - ship.x) < 40 && Math.abs(b.y - ship.y) < 25) {
+        targetY = ship.y + (b.y > ship.y ? -30 : 30);
         targetY = Phaser.Math.Clamp(targetY, world.topY + 16, world.topY + world.height - 16);
       }
     });
 
-    // Target enemies
     world.enemies.getChildren().forEach((enemy) => {
       const dx = (enemy.x - ship.x) * dir;
-      if (dx > 0 && dx < 200 && nearestThreatDist > 60) {
+      if (dx > 0 && dx < 180 && nearestDist > 50) {
         targetY = enemy.y;
-        if (Math.abs(ship.y - enemy.y) < 14) shouldShoot = true;
+        if (Math.abs(ship.y - enemy.y) < 12) shouldShoot = true;
       }
     });
 
-    // Move
     const dy = targetY - ship.y;
-    ship.body.setVelocityY(Math.abs(dy) > 4 ? (dy > 0 ? speed : -speed) : 0);
+    ship.body.setVelocityY(Math.abs(dy) > 4 ? Math.sign(dy) * speed : 0);
 
     const safeX = dir === 1 ? 50 : W - 50;
     const driftX = safeX - ship.x;
-    ship.body.setVelocityX(Math.abs(driftX) > 8 ? (driftX > 0 ? speed * 0.3 : -speed * 0.3) : 0);
+    ship.body.setVelocityX(Math.abs(driftX) > 6 ? Math.sign(driftX) * speed * 0.3 : 0);
 
-    // Shoot
     world.aiShootCooldown -= dt;
     if (shouldShoot && world.aiShootCooldown <= 0) {
       this.fireBullet(world);
-      world.aiShootCooldown = 0.4;
+      world.aiShootCooldown = 0.45;
     }
   }
 }
